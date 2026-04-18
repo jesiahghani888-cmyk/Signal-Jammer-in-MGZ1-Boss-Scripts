@@ -1,0 +1,1614 @@
+global bool Tenna.boss.signalJammer.defeated
+global u8 Tenna.boss.signalJammer.state
+global u16 Tenna.boss.signalJammer.stateTimer
+global u16 Tenna.boss.signalJammer.stateRepeat
+global bool Tenna.boss.signalJammer.flipFlag
+global bool Tenna.boss.signalJammer.shootFlipFlag
+
+global s16 Tenna.boss.signalJammer.legFrontXOffset
+global s16 Tenna.boss.signalJammer.legFrontYOffset
+global s16 Tenna.boss.signalJammer.legBackXOffset
+global s16 Tenna.boss.signalJammer.legBackYOffset
+
+global u8 Tenna.boss.signalJammer.maxDrones
+global u8 Tenna.boss.signalJammer.currentDrones
+global u8 Tenna.boss.signalJammer.droneDelayTimer
+global u8 Tenna.boss.signalJammer.droneDoorOpenTimer
+global u8 Tenna.boss.signalJammer.defeatedDrones
+
+function void Tenna.boss.signalJammer.Initalize()
+{
+	if (allocDynamicObjectStd()) // solid collision
+	{
+		objA1.position.x.u16 = 0
+		objA1.position.y.u16 = 0
+		objA1.update_address = 0x3134EA
+		objA1.box_size.x = 255
+		objA1.box_size.y = 255
+		objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+		objA1.render_flags = render_flag.WORLD
+		objA1.sprite_priority = 0x100
+	}
+    if TennmechaTwoCheckpoint
+    {
+        Tenna.trueFinalBoss.disablePause = true
+        if (allocDynamicObjectStd()) // phase 2
+        {
+            Tenna.boss.signalJammer.defeated = true
+            finalopacity1 = 1
+            finalopacity2 = 1
+            playSound(SFX_SUPERTRANSFORM)
+            TennmechaTwoIntro.state = 0
+            TennmechaTwoIntro.stateTimer = 0
+            TennmechaTwo.mouthOpen = false
+            TennmechaTwo.cockpitOpen = false
+            objA1.update_address = 0x313416
+            objA1.subtype2c = 0x00
+            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+            objA1.render_flags = render_flag.WORLD
+            objA1.sprite_priority = 0x100         
+            objA1.box_size.x = 255
+            objA1.box_size.y = 255
+            objA1.collision_attributes = collision.size.16x16
+            objA1.hitbox_extends.x = 12
+            objA1.hitbox_extends.y = 16
+            objA1.position.x.u16 = camera.position.x.u16 + getScreenWidth() / 2
+            objA1.position.y.u16 = camera.position.y.u16 + getScreenHeight() / 2 - 16
+        }
+        return
+    }
+    else if Tenna.finalIntro.sawCutscene
+    {
+        if (allocDynamicObjectStd()) // cutscene controller
+        {
+            Tenna.boss.signalJammer.defeated = true
+            Tenna.finalIntro.state = 0
+            Tenna.finalIntro.stateTimer = 0
+            objA1.update_address = 0x313372
+            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+            objA1.render_flags = render_flag.WORLD
+            objA1.sprite_priority = 0x100         
+            objA1.box_size.x = 48
+            objA1.box_size.y = 48
+            objA1.collision_attributes = collision.size.16x16
+            objA1.hitbox_extends.x = 12
+            objA1.hitbox_extends.y = 16
+            objA1.position.x.u16 = objA0.position.x.u16 + 96
+            objA1.position.y.u16 = objA0.position.y.u16
+        }
+        return
+    }
+    Tenna.fH.friedTimer = 0
+    Tenna.laughTimer = 0
+    global.random.seed = global.framecounter
+    level.boss_encounter = 1
+	System.setGlobalVariableValueByName("bossWarningMod.canDoBossWarning", true)
+	System.callFunctionByName("bossWarningMod.createWarningEffect")
+    if (allocDynamicObjectStd())
+    {
+        Tenna.boss.signalJammer.defeated = false
+
+        objA1.position.x.u16 = camera.position.x.u16 + getScreenWidth() + 200
+        objA1.position.y.u16 = camera.position.y.u16 + getScreenHeight() / 2 - 22
+        objA1.update_address = 0x313362
+
+        objA1.box_size.x = 255
+        objA1.box_size.y = 255
+        objA1.collision_attributes = collision.size.16x16
+
+        objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+        objA1.render_flags = render_flag.WORLD
+        objA1.sprite_priority = 0x100
+
+        Tenna.boss.signalJammer.state = 0
+        Tenna.boss.signalJammer.stateTimer = 0
+        Tenna.boss.signalJammer.stateRepeat = 0
+        Tenna.boss.signalJammer.flipFlag = false
+
+        Tenna.boss.signalJammer.legFrontXOffset = 0
+        Tenna.boss.signalJammer.legFrontYOffset = 0
+        Tenna.boss.signalJammer.legBackXOffset = 0
+        Tenna.boss.signalJammer.legBackYOffset = 0
+
+        Tenna.boss.signalJammer.maxDrones = 0
+        Tenna.boss.signalJammer.currentDrones = 0
+        Tenna.boss.signalJammer.droneDelayTimer = 255
+        Tenna.boss.signalJammer.droneDoorOpenTimer = 0
+        Tenna.boss.signalJammer.defeatedDrones = 0
+    }
+}
+
+//#address-hook(0x313364)
+function void Tenna.boss.signalDrone.BaseUpdate()
+{
+    objA0.box_size.x = 255
+    objA0.box_size.y = 255
+    UpdateMovementStraightSimple()
+    if !player1.control_override
+        Enemy.DrawDynamicObject()
+    else
+        DrawObject()
+    boss.remaining_hits = 99
+    Drone.HealthUpdater()
+
+    if level.boss_encounter || Tenna.boss.signalJammer.state
+    {
+        if objA0.position.x.u16 < camera.position.x.u16 + 16
+        {
+            objA0.position.x.u16 = camera.position.x.u16 + 16
+            objA0.velocity.x = -objA0.velocity.x
+        }
+        if objA0.position.x.u16 > camera.position.x.u16 + getScreenWidth() - 16
+        {
+            objA0.position.x.u16 = camera.position.x.u16 + getScreenWidth() - 16
+            objA0.velocity.x = -objA0.velocity.x
+        }
+        if (objA0.position.y.u16 < camera.position.y.u16 + 16) && (global.zone != 0x0a)
+        {
+            objA0.position.y.u16 = camera.position.y.u16 + 16
+            objA0.velocity.y = -objA0.velocity.y
+        }
+        if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() - 48
+        {
+            objA0.position.y.u16 = camera.position.y.u16 + getScreenHeight() - 48
+            objA0.velocity.y = -objA0.velocity.y
+        }
+    }
+    else if !(objA0.render_flags & render_flag.VISIBLE) && (objA0.state > 120)
+    {
+        Tenna.boss.signalJammer.maxDrones = 0
+        Tenna.boss.signalJammer.currentDrones = 0
+		objA0.animation.sprite = 0
+		Object.TriggerUnloading()
+		return
+    }
+
+    if !hud.dirty.timer && global.zone == 0x0a || Tenna.sszTeleportInv
+    {
+        Tenna.createBatteryRing()
+        spawnChildObject(0x083d84, 0x00, 0, 0)		// Boss explosion generator
+        //if objA0.subtype2c
+        {
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31335C
+                objA1.subtype2c = 0x00
+                
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                    
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.position.x.u16 = objA0.position.x.u16
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.y = -0x200 - D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.x = 0x100 + D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0x3
+                if D0.u16 > 0x2
+                    objA1.velocity.x = -objA1.velocity.x
+            }
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31335C
+                objA1.subtype2c = 0x00
+                
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                    
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.position.x.u16 = objA0.position.x.u16
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.y = -0x200 - D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.x = -0x100 - D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0x3
+                if D0.u16 > 0x2
+                    objA1.velocity.x = -objA1.velocity.x
+            }
+        }
+
+        Tenna.boss.signalJammer.currentDrones--
+        Tenna.boss.signalJammer.droneDelayTimer = 120
+
+        GetRandomNumber()
+        D0.u16 &= 0xff
+        objA0.velocity.y = -0x200 - D0.u16
+
+        GetRandomNumber()
+        D0.u16 &= 0xff
+        objA0.velocity.x = 0x100 + D0.u16
+
+        GetRandomNumber()
+        D0.u16 &= 0x3
+        if D0.u16 > 0x2
+            objA0.velocity.x = -objA0.velocity.x
+
+        objA0.subtype2c = 0x02
+        objA0.update_address = 0x31335C
+		return
+    }
+
+    if !objA0.state
+    {
+        GetRandomNumber()
+        D0.u16 &= 0xff
+        objA0.velocity.y = -0x300 - D0.u16
+
+        GetRandomNumber()
+        D0.u16 &= 0xff
+        objA0.velocity.x = 0x180 + D0.u16
+
+        GetRandomNumber()
+        D0.u16 &= 0x3
+        if D0.u16 > 0x2
+            objA0.velocity.x = -objA0.velocity.x
+
+        GetRandomNumber()
+        D0.u16 &= 0x3
+        if D0.u16 > 0x2
+            objA0.velocity.y = -objA0.velocity.y
+
+        if global.zone == 0x0a
+            objA0.velocity.y = 0x400
+    }
+
+    objA0.state++
+
+    if objA0.state == 255
+        objA0.state = 0
+
+    if objA0.state < 120
+    {
+        if !(level.framecounter.low & 0x0f)
+        {
+            objA0.velocity.x = objA0.velocity.x / 2
+            objA0.velocity.y = objA0.velocity.y / 2
+        }
+    }
+    else if objA0.state >= 120 && objA0.state < 180
+    {
+        LemonsTools_angleCheckWithSpeed(0x100)
+    }
+    else
+    {
+        A1 = 0x08859c
+        if objA0.state == 181
+            playSound(0x5a)
+
+        if !(level.framecounter.low & 0x0f)
+        {
+            objA0.velocity.x = objA0.velocity.x / 2
+            objA0.velocity.y = objA0.velocity.y / 2
+        }
+
+        if objA0.position.x.u16 > objA1.position.x.u16
+        {
+            if objA0.state == 220
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, -0x8, 0x0b)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+            if objA0.state == 230 && Tenna.boss.signalJammer.currentDrones < 2
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, -0x8, -0x02)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+            if objA0.state == 240
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, 0x12, 0x0b)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+            if objA0.state == 250 && Tenna.boss.signalJammer.currentDrones < 2
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, 0x12, -0x02)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+        }
+        else
+        {
+            if objA0.state == 220
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, 0x8, 0x0b)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+            if objA0.state == 230 && Tenna.boss.signalJammer.currentDrones < 2
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, 0x8, -0x02)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+            if objA0.state == 240
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, -0x12, 0x0b)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+            if objA0.state == 250 && Tenna.boss.signalJammer.currentDrones < 2
+            {
+                playSound(0x4d)
+                spawnChildObject(0x313366, 0x00, -0x12, -0x02)
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+            }
+        }
+    }
+}
+
+//#address-hook(0x313366)
+function void Tenna.boss.signalDroneShot.BaseUpdate()
+{
+	objA0.collision_attributes = collision.size.4x4_2 | collision.flag.THREAT
+
+    objA0.box_size.x = 48
+    objA0.box_size.y = 48
+
+	if (objA0.state > 250) || Tenna.sszTeleportInv 
+	{
+		objA0.animation.sprite = 0
+		Object.TriggerUnloading()
+		return
+	}
+
+    if !player1.control_override
+        Enemy.DrawDynamicObject()
+    else
+        DrawObject()
+	UpdateMovementStraightSimple()
+
+    if objA0.state++ < 2
+    {
+        objA0.flags2b |= char.bonus.DEFLECTABLE
+        if Tennmecha.state == 3 || global.zone == 0x08
+            LemonsTools_angleCheckWithSpeed(Tennmecha.hardAttacks ? 0xa00 : 0x800)
+        else
+            LemonsTools_angleCheckWithSpeed(0x400)
+    }
+}
+
+function void Drone.HealthUpdater()
+{
+    if (objA0.collision_attributes != 0)
+        return
+
+    //if (objA0.state)
+    {
+        Tenna.boss.signalJammer.defeatedDrones++
+
+        playSound(0x6e)
+
+        objA0.state = 0
+
+        Tenna.createBatteryRing()
+
+        if Tenna.boss.signalJammer.defeatedDrones <= 30 // only award 300 points total
+        {
+            if (allocDynamicObjectStd())
+            {
+                addScore(1)
+                // Spawn floating points display
+                objA1.update_address = addressof(FloatingPoints.Init)
+                objA1.position.x.u16 = objA0.position.x.u16
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.animation.sprite = 0x04
+            }
+        }
+        //if objA0.subtype2c
+        {
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31335C
+                objA1.subtype2c = 0x00
+                
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                    
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.position.x.u16 = objA0.position.x.u16
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.y = -0x200 - D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.x = 0x100 + D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0x3
+                if D0.u16 > 0x2
+                    objA1.velocity.x = -objA1.velocity.x
+            }
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31335C
+                objA1.subtype2c = 0x00
+                
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                    
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.position.x.u16 = objA0.position.x.u16
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.y = -0x200 - D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0xff
+                objA1.velocity.x = -0x100 - D0.u16 * 2
+
+                GetRandomNumber()
+                D0.u16 &= 0x3
+                if D0.u16 > 0x2
+                    objA1.velocity.x = -objA1.velocity.x
+            }
+        }
+
+        Tenna.boss.signalJammer.currentDrones--
+        Tenna.boss.signalJammer.droneDelayTimer = 120
+
+        GetRandomNumber()
+        D0.u16 &= 0xff
+        objA0.velocity.y = -0x200 - D0.u16
+
+        GetRandomNumber()
+        D0.u16 &= 0xff
+        objA0.velocity.x = 0x100 + D0.u16
+
+        GetRandomNumber()
+        D0.u16 &= 0x3
+        if D0.u16 > 0x2
+            objA0.velocity.x = -objA0.velocity.x
+
+        objA0.subtype2c = 0x02
+        objA0.update_address = 0x31335C
+    }
+}
+
+//#address-hook(0x313362)
+function void Tenna.boss.signalJammer.BaseUpdate()
+{
+    UpdateMovementStraightSimple()
+
+	Tenna.boss.signalJammer.StateMachine()
+	Tenna.boss.signalJammer.HealthUpdater()
+    Tenna.boss.signalJammer.SpawnDrones()
+
+    DrawBossHealthBar(0xb, boss.remaining_hits, 10)
+
+    if boss.remaining_hits >= 6
+        Tenna.boss.signalJammer.maxDrones = 1
+    else if boss.remaining_hits < 6 && boss.remaining_hits >= 3
+        Tenna.boss.signalJammer.maxDrones = 2
+    else
+        Tenna.boss.signalJammer.maxDrones = 3
+
+    objA0.box_size.x = 255
+    objA0.box_size.y = 255
+
+    if Tenna.boss.signalJammer.state == 1 && !Tenna.boss.signalJammer.stateTimer && !Tenna.boss.signalJammer.stateRepeat
+        return
+
+    Enemy.DrawDynamicObject()
+
+    if !Tenna.boss.signalJammer.flipFlag
+    {
+        A1 = 0xffffb000
+        if objA1.position.x.u16 > objA0.position.x.u16
+        {
+            objA1.position.x.u16 = objA0.position.x.u16
+            objA1.velocity.x = 0
+            objA1.groundspeed = 0
+        }
+        A1 = 0xffffb04a
+        if objA1.position.x.u16 > objA0.position.x.u16
+        {
+            objA1.position.x.u16 = objA0.position.x.u16
+            objA1.velocity.x = 0
+            objA1.groundspeed = 0
+        }
+    }
+    else
+    {
+        A1 = 0xffffb000
+        if objA1.position.x.u16 < objA0.position.x.u16
+        {
+            objA1.position.x.u16 = objA0.position.x.u16
+            objA1.velocity.x = 0
+            objA1.groundspeed = 0
+        }
+        A1 = 0xffffb04a
+        if objA1.position.x.u16 < objA0.position.x.u16
+        {
+            objA1.position.x.u16 = objA0.position.x.u16
+            objA1.velocity.x = 0
+            objA1.groundspeed = 0
+        }
+    }
+}
+
+function void Tenna.boss.signalJammer.SpawnDrones()
+{
+    if Tenna.boss.signalJammer.droneDelayTimer
+        Tenna.boss.signalJammer.droneDelayTimer--
+    if Tenna.boss.signalJammer.droneDoorOpenTimer
+        Tenna.boss.signalJammer.droneDoorOpenTimer--
+
+    if Tenna.boss.signalJammer.droneDoorOpenTimer == 1
+        playSound(0x6d)
+
+    if Tenna.boss.signalJammer.currentDrones >= Tenna.boss.signalJammer.maxDrones || Tenna.boss.signalJammer.droneDelayTimer
+        return
+    if boss.remaining_hits > 8
+        return
+
+    Tenna.boss.signalJammer.droneDoorOpenTimer = 60
+    Tenna.boss.signalJammer.droneDelayTimer = 30
+    Tenna.boss.signalJammer.currentDrones++
+
+    playSound(0x6d)
+
+    if Tenna.boss.signalJammer.flipFlag
+        spawnChildObject(0x313364, 0x00, -0x64, 0x10) // Drone
+    else
+        spawnChildObject(0x313364, 0x00, 0x64, 0x10) // Drone
+    objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+    objA1.render_flags = render_flag.WORLD
+    objA1.sprite_priority = 0x100
+    objA1.hitbox_extends.x = 16
+    objA1.hitbox_extends.y = 16
+    objA1.box_size.x = 999
+    objA1.box_size.y = 999
+    objA1.state = 0
+    objA1.collision_attributes = collision.size.8x8_2
+
+    if global.zone == 0x0a
+        objA1.position.y.u16 = camera.position.y.u16 - 32
+}
+
+function void Tenna.boss.signalJammer.HealthUpdater()
+{
+    if (objA0.collision_attributes != 0)
+        return
+
+    if (objA0.state == 0)
+    {
+        //boss.remaining_hits = 0 // debug
+        playSound(0x6e)
+        Tenna.fH.hurtTimer = 32 * 2
+        objA0.state = 0x20 * 2
+        objA0.flags2a |= 0x40
+        return
+    }
+    if boss.remaining_hits <= 0
+    {
+        Tenna.useLetterboxing = true
+        Tenna.sszTeleportInv = true
+        A1 = 0xffffb000
+        if Tenna.boss.signalJammer.flipFlag
+            objA0.position.x.u16 -= 160
+        playMusic(MUSIC_CTRL_FADEOUT)
+        AddScoreForBossEnemy()
+        Tenna.fH.hurtTimer = 0
+        //spawnChildObject(0x083d84, 0x00, 0, 0)		// Boss explosion generator
+        objA0.update_address = 0x31336A
+        objA0.velocity.x = 0
+        objA0.velocity.y = 0
+        Tenna.boss.signalJammer.state = 5
+        Tenna.boss.signalJammer.stateTimer = 0
+		Tenna.boss.signalJammer.defeated = true
+        objA0.state = 0
+		Game.startSkippableCutscene()
+        return
+    }
+
+    // code for hit flashing and other stuff here
+
+    --objA0.state
+    if (objA0.state == 0)
+    {
+        objA0.flags2a &= ~0x40
+        u8[A0 + 0x28] = u8[A0 + 0x25]
+    }
+}
+
+function void Tenna.boss.signalJammer.StateMachine()
+{
+    Tenna.boss.signalJammer.stateTimer++
+    if !Tenna.boss.signalJammer.state
+    {
+        boss.remaining_hits = 10 // 10
+        Tenna.boss.signalJammer.droneDelayTimer = 240
+        Tenna.boss.signalJammer.currentDrones = 0
+        if Tenna.boss.signalJammer.stateTimer < 30
+            return
+        Tenna.boss.signalJammer.state = 1
+        Tenna.boss.signalJammer.stateTimer = 0
+    }
+    else if Tenna.boss.signalJammer.state == 1
+    {
+        if !Tenna.boss.signalJammer.stateRepeat
+            Tenna.boss.signalJammer.droneDelayTimer = 30
+        if Tenna.boss.signalJammer.flipFlag
+        {
+            if Tenna.boss.signalJammer.stateTimer == 1
+            {
+                objA0.position.y.u16 = camera.position.y.u16 + getScreenHeight() / 2 - 20
+                if !Tenna.boss.signalJammer.stateRepeat
+                    objA0.position.x.u16 = camera.position.x.u16 - 140
+                Tenna.boss.signalJammer.legFrontXOffset = 0
+                Tenna.boss.signalJammer.legFrontYOffset = 0
+                Tenna.boss.signalJammer.legBackXOffset = 0
+                Tenna.boss.signalJammer.legBackYOffset = 0
+            }
+            if Tenna.boss.signalJammer.stateTimer < 20
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 20 && Tenna.boss.signalJammer.stateTimer < 40
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 40 && Tenna.boss.signalJammer.stateTimer < 60
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 60 && Tenna.boss.signalJammer.stateTimer < 80
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+        }
+        else
+        {
+            if Tenna.boss.signalJammer.stateTimer == 1
+            {
+                objA0.position.y.u16 = camera.position.y.u16 + getScreenHeight() / 2 - 20
+                if !Tenna.boss.signalJammer.stateRepeat
+                    objA0.position.x.u16 = camera.position.x.u16 + getScreenWidth() + 140
+                Tenna.boss.signalJammer.legFrontXOffset = 0
+                Tenna.boss.signalJammer.legFrontYOffset = 0
+                Tenna.boss.signalJammer.legBackXOffset = 0
+                Tenna.boss.signalJammer.legBackYOffset = 0
+            }
+            if Tenna.boss.signalJammer.stateTimer < 20
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 20 && Tenna.boss.signalJammer.stateTimer < 40
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 40 && Tenna.boss.signalJammer.stateTimer < 60
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 60 && Tenna.boss.signalJammer.stateTimer < 80
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+        }
+        if Tenna.boss.signalJammer.stateTimer == 40 || Tenna.boss.signalJammer.stateTimer == 80
+            playSound(0x96)
+        if Tenna.boss.signalJammer.stateTimer == 80
+        {
+            Tenna.boss.signalJammer.legFrontXOffset = 0
+            Tenna.boss.signalJammer.legFrontYOffset = 0
+            Tenna.boss.signalJammer.legBackXOffset = 0
+            Tenna.boss.signalJammer.legBackYOffset = 0
+            if !Tenna.boss.signalJammer.stateRepeat
+            {
+                Tenna.boss.signalJammer.stateRepeat++
+                Tenna.boss.signalJammer.state = 1
+                Tenna.boss.signalJammer.stateTimer = 0
+            }
+            else
+            {
+                Tenna.boss.signalJammer.stateRepeat = 0
+                Tenna.boss.signalJammer.state = 2
+                Tenna.boss.signalJammer.stateTimer = 0
+            }
+        }
+    }
+    else if Tenna.boss.signalJammer.state == 2
+    {
+        if Tenna.boss.signalJammer.stateTimer == 1
+            playSound(0x84)
+
+        if Tenna.boss.signalJammer.stateTimer == 120
+        {
+            playSound(0x81)
+            camera.hyper_knux_shake = 0x14
+
+            if Tenna.boss.signalJammer.flipFlag
+                spawnChildObject(0x220268, 0x00, 0x12, 0x00) // Chaotix Explosion
+            else
+                spawnChildObject(0x220268, 0x00, -0x12, 0x00) // Chaotix Explosion
+            objA1.mapping_offset = 0x01a99a
+            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+            objA1.render_flags = render_flag.WORLD
+            objA1.sprite_priority = 0x100
+            objA1.hitbox_extends.x = 16
+            objA1.hitbox_extends.y = 16
+            objA1.box_size.x = 999
+            objA1.box_size.y = 999
+            objA1.state = 0
+            objA1.collision_attributes = (collision.size.16x16 | collision.flag.THREAT)
+
+
+            if Tenna.boss.signalJammer.flipFlag
+                spawnChildObject(0x313368, 0x00, 0x12, 0x00) // Signal Jammer Bomb
+            else
+                spawnChildObject(0x313368, 0x00, -0x12, 0x00) // Signal Jammer Bomb
+            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+            objA1.render_flags = render_flag.WORLD
+            objA1.sprite_priority = 0x100
+            objA1.hitbox_extends.x = 16
+            objA1.hitbox_extends.y = 16
+            objA1.box_size.x = 999
+            objA1.box_size.y = 999
+            objA1.state = 0
+            objA1.collision_attributes = (collision.size.16x16 | collision.flag.THREAT)
+        }
+
+        if boss.remaining_hits < 5 && Tenna.boss.signalJammer.stateTimer == 160
+            playSound(0xa5)
+        if boss.remaining_hits < 5 && Tenna.boss.signalJammer.stateTimer > 180
+        {
+            if !(level.framecounter.low & 0x0f)
+            {
+                if Tenna.boss.signalJammer.flipFlag
+                {
+                    if Tenna.boss.signalJammer.shootFlipFlag
+                    {
+                        spawnChildObject(0x313310, 0x00, -0x32, -0x48)
+                        Tenna.boss.signalJammer.shootFlipFlag = false
+                    }
+                    else
+                    {
+                        spawnChildObject(0x313310, 0x00, -0x64, -0x48)
+                        Tenna.boss.signalJammer.shootFlipFlag = true
+                    }
+                }
+                else
+                {
+                    if Tenna.boss.signalJammer.shootFlipFlag
+                    {
+                        spawnChildObject(0x313310, 0x00, 0x32, -0x48)
+                        Tenna.boss.signalJammer.shootFlipFlag = false
+                    }
+                    else
+                    {
+                        spawnChildObject(0x313310, 0x00, 0x64, -0x48)
+                        Tenna.boss.signalJammer.shootFlipFlag = true
+                    }
+                }
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x300
+                objA1.velocity.x = 0
+                objA1.velocity.y = 0
+                objA1.state = 0
+            }
+        }
+
+        if Tenna.boss.signalJammer.stateTimer < 240
+            return
+        Tenna.boss.signalJammer.state = 3
+        Tenna.boss.signalJammer.stateTimer = 0
+    }
+    else if Tenna.boss.signalJammer.state == 3
+    {
+        if Tenna.boss.signalJammer.stateRepeat
+            Tenna.boss.signalJammer.droneDelayTimer = 30
+        if Tenna.boss.signalJammer.flipFlag
+        {
+            if Tenna.boss.signalJammer.stateTimer == 1
+            {
+                objA0.position.y.u16 = camera.position.y.u16 + getScreenHeight() / 2 - 20
+                Tenna.boss.signalJammer.legFrontXOffset = 0
+                Tenna.boss.signalJammer.legFrontYOffset = 0
+                Tenna.boss.signalJammer.legBackXOffset = 0
+                Tenna.boss.signalJammer.legBackYOffset = 0
+            }
+            if Tenna.boss.signalJammer.stateTimer < 20
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 20 && Tenna.boss.signalJammer.stateTimer < 40
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 40 && Tenna.boss.signalJammer.stateTimer < 60
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 60 && Tenna.boss.signalJammer.stateTimer < 80
+            {
+                objA0.position.x.u16 -= 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+        }
+        else
+        {
+            if Tenna.boss.signalJammer.stateTimer == 1
+            {
+                objA0.position.y.u16 = camera.position.y.u16 + getScreenHeight() / 2 - 20
+                Tenna.boss.signalJammer.legFrontXOffset = 0
+                Tenna.boss.signalJammer.legFrontYOffset = 0
+                Tenna.boss.signalJammer.legBackXOffset = 0
+                Tenna.boss.signalJammer.legBackYOffset = 0
+            }
+            if Tenna.boss.signalJammer.stateTimer < 20
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 20 && Tenna.boss.signalJammer.stateTimer < 40
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset += 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset -= 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 40 && Tenna.boss.signalJammer.stateTimer < 60
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 -= 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset += 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset -= 1
+            }
+            else if Tenna.boss.signalJammer.stateTimer >= 60 && Tenna.boss.signalJammer.stateTimer < 80
+            {
+                objA0.position.x.u16 += 2
+                objA0.position.y.u16 += 1
+
+                Tenna.boss.signalJammer.legFrontXOffset -= 2
+                Tenna.boss.signalJammer.legFrontYOffset -= 1
+
+                Tenna.boss.signalJammer.legBackXOffset += 2
+                Tenna.boss.signalJammer.legBackYOffset += 1
+            }
+        }
+        if Tenna.boss.signalJammer.stateTimer == 40 || Tenna.boss.signalJammer.stateTimer == 80
+            playSound(0x96)
+        if Tenna.boss.signalJammer.stateTimer == 80
+        {
+            Tenna.boss.signalJammer.legFrontXOffset = 0
+            Tenna.boss.signalJammer.legFrontYOffset = 0
+            Tenna.boss.signalJammer.legBackXOffset = 0
+            Tenna.boss.signalJammer.legBackYOffset = 0
+            if !Tenna.boss.signalJammer.stateRepeat
+            {
+                Tenna.boss.signalJammer.stateRepeat++
+                Tenna.boss.signalJammer.state = 3
+                Tenna.boss.signalJammer.stateTimer = 0
+                Tenna.boss.signalJammer.droneDelayTimer = 240
+            }
+            else
+            {
+                if Tenna.boss.signalJammer.flipFlag
+                    Tenna.boss.signalJammer.flipFlag = false
+                else
+                    Tenna.boss.signalJammer.flipFlag = true
+                Tenna.boss.signalJammer.stateRepeat = 0
+                Tenna.boss.signalJammer.state = 1
+                Tenna.boss.signalJammer.stateTimer = 0
+            }
+        }
+    }
+}
+
+//#address-hook(0x313368)
+function void Tenna.boss.signalJammer.bomb.BaseUpdate()
+{
+	s16 shakeX = s16(camera.position.x.u16) - s16(camera.foreground.x.u16)
+	s16 shakeY = s16(camera.position.y.u16) - s16(camera.foreground.y.u16)
+	bool prioFlag = (objA0.sprite_attributes & sprite_attribute.PRIORITY) != 0
+    
+    if !objA0.state 
+    {
+        // u16[A0 + 0x30] = target x
+		A1 = 0xffffb000
+		u16[A0 + 0x30] = objA1.position.x.u16
+        if Tenna.bossBomber.dropBombTimes >= 4
+            Tenna.bossBomber.dropBombTimes = 0
+        else
+            Tenna.bossBomber.dropBombTimes++
+        objA0.state++
+        return
+    }
+    if objA0.state == 1
+    {
+        objA0.velocity.y = -0x100
+        objA0.state++
+    }
+    DrawObject()
+    UpdateMovementStraightSimple()
+    MoveWithGravity20()
+
+    objA0.position.x.u16 = Math.roundToInt(lerp(objA0.position.x.u16, u16[A0 + 0x30], 0.1f))
+
+    if !(global.framecounter.low & 0x03)
+        playSound(0x89)  
+
+    if !(level.framecounter.low & 0x01)
+        Renderer.drawCustomSprite("tenna_bbb_bomb_watchout_0", u16[A0 + 0x30] - camera.position.x.u16 + shakeX, 0xde - camera.position.y.u16 + shakeY, 0x00, (prioFlag ? SPRITE_FLAG_PRIO : 0), 0x9001)
+    else
+        Renderer.drawCustomSprite("tenna_bbb_bomb_watchout_1", u16[A0 + 0x30] - camera.position.x.u16 + shakeX, 0xde - camera.position.y.u16 + shakeY, 0x00, (prioFlag ? SPRITE_FLAG_PRIO : 0), 0x9001)
+
+	if objA0.position.y.u16 > 0xd0
+	{
+		playSound(0x4e)
+
+		camera.screenshake.state = 0x10
+
+        Input.setControllerRumble(-1, 0.5f, 0.5f, 500)
+
+		// Spawn explosions
+		// "spawnChildObjects(0x0690d8)" replaced by:
+		spawnChildObject(0x068d88, 0x00, 0, -36)
+		spawnChildObject(0x068d88, 0x02, 8, -28)
+		spawnChildObject(0x068d88, 0x04, -8, -28)
+		spawnChildObject(0x068d88, 0x06, 4, -20)
+		spawnChildObject(0x068d88, 0x08, -4, -20)
+		spawnChildObject(0x068d88, 0x0a, 4, -4)
+		spawnChildObject(0x068d88, 0x0c, -4, -4)
+
+        spawnChildObject(0x220248, 0x00, 0, 0) // Spread Fire (Left)
+        s16[A1 + 0x2e] = 15
+        objA1.mapping_offset = 0x01a99a
+        objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+        objA1.render_flags = render_flag.WORLD
+        objA1.sprite_priority = 0x100
+        objA1.hitbox_extends.x = 8
+        objA1.hitbox_extends.y = 8
+        objA1.collision_attributes = (collision.size.8x16 | collision.flag.THREAT)
+        objA1.velocity.x = -0x500
+        objA1.velocity.y = 0
+        objA1.box_size.x = 999
+        objA1.box_size.y = 999
+        objA1.flags2b |= char.bonus.SHIELD_FIRE  
+		objA1.value39 = 0
+
+        spawnChildObject(0x220248, 0x00, 0, 0) // Spread Fire (Right)
+        s16[A1 + 0x2e] = 15
+        objA1.mapping_offset = 0x01a99a
+        objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+        objA1.render_flags = render_flag.WORLD
+        objA1.sprite_priority = 0x100
+        objA1.hitbox_extends.x = 8
+        objA1.hitbox_extends.y = 8
+        objA1.collision_attributes = (collision.size.8x16 | collision.flag.THREAT)
+        objA1.velocity.x = 0x500
+        objA1.velocity.y = 0
+        objA1.box_size.x = 999
+        objA1.box_size.y = 999
+        objA1.flags2b |= char.bonus.SHIELD_FIRE 
+		objA1.value39 = 0
+
+		objA0.animation.sprite = 0
+
+		Object.TriggerUnloading()
+		return
+	}
+}
+
+function bool Standalone.onWriteToSpriteTable(s16 px, s16 py, u16 renderQueue)
+{
+    A1 = 0xffffb000
+    bool flipFlag = !Tenna.boss.signalJammer.flipFlag ? 0 : SPRITE_FLAG_FLIP_X  
+    bool droneFlipFlag = objA0.position.x.u16 > objA1.position.x.u16 ? 0 : SPRITE_FLAG_FLIP_X
+    if (objA0.update_address == 0x313366) // Signal Jammer Drone Shot
+    {
+        if (global.framecounter.low & 0x01)
+        {
+            SpriteHandle shot = Renderer.addSpriteHandle("tenna_signaljammer_drone_shot_0", px, py, 0xd013)
+            shot.setPriorityFlag(true)
+            shot.setFlipX(droneFlipFlag)
+            shot.setBlendMode(global.zone == 0x08 || global.zone == 0x0a ? 5 : 3)
+        }
+        else
+        {
+            SpriteHandle shot = Renderer.addSpriteHandle("tenna_signaljammer_drone_shot_1", px, py, 0xd013)
+            shot.setPriorityFlag(true)
+            shot.setFlipX(droneFlipFlag)
+            shot.setBlendMode(global.zone == 0x08 || global.zone == 0x0a ? 5 : 3)
+        }
+        return true
+    }
+    if (objA0.update_address == 0x313364) // Signal Jammer Drone
+    {
+        if objA0.state > 180
+        {
+            if (global.framecounter.low & 0x01)
+            {
+                SpriteHandle antennacharge = Renderer.addSpriteHandle("tenna_signaljammer_drone_gun's_front_charge", px, py, 0x4080)
+                antennacharge.setPriorityFlag(true)
+                antennacharge.setFlipX(droneFlipFlag)
+                antennacharge.setBlendMode(3)
+                if (global.framecounter.low & 0x03)
+                    antennacharge.setTintColor(1, 1, 1, 0.7)
+                else
+                    antennacharge.setTintColor(1, 1, 1, 0.2) 
+            }
+            else
+            {
+                SpriteHandle antennacharge = Renderer.addSpriteHandle("tenna_signaljammer_drone_gun's_back_charge", px, py, 0x4080)
+                antennacharge.setPriorityFlag(true)
+                antennacharge.setFlipX(droneFlipFlag)
+                antennacharge.setBlendMode(3)
+                if !(global.framecounter.low & 0x03)
+                    antennacharge.setTintColor(1, 1, 1, 0.7)
+                else
+                    antennacharge.setTintColor(1, 1, 1, 0.2) 
+            }
+        }
+        if (global.framecounter.low & 0x01)
+            Renderer.drawCustomSprite("tenna_signaljammer_drone_body_1", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | droneFlipFlag), 0x4061)
+        else
+            Renderer.drawCustomSprite("tenna_signaljammer_drone_body_0", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | droneFlipFlag), 0x4061)
+        
+        Renderer.drawCustomSprite("tenna_signaljammer_drone_gun's_front", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | droneFlipFlag), 0x4062)
+        Renderer.drawCustomSprite("tenna_signaljammer_drone_gun's_back", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | droneFlipFlag), 0x4060)
+        return true
+    }
+	if (objA0.update_address == 0x313362) // Signal Jammer
+	{
+        if boss.remaining_hits < 5 && Tenna.boss.signalJammer.state == 2 && Tenna.boss.signalJammer.stateTimer > 160
+        {
+            SpriteHandle antennacharge = Renderer.addSpriteHandle("tenna_signaljammer_antennacharge", px, py, 0x4040)
+            antennacharge.setPriorityFlag(true)
+            antennacharge.setFlipX(flipFlag)
+            antennacharge.setBlendMode(3)
+            if !(global.framecounter.low & 0x01)
+                antennacharge.setTintColor(1, 1, 1, 0.7)
+            else
+                antennacharge.setTintColor(1, 1, 1, 0.2) 
+        }
+        if Tenna.boss.signalJammer.state == 2 && Tenna.boss.signalJammer.stateTimer < 120
+        {
+            SpriteHandle cannoncharge = Renderer.addSpriteHandle("tenna_signaljammer_cannoncharge", px, py, 0x4040)
+            cannoncharge.setPriorityFlag(true)
+            cannoncharge.setFlipX(flipFlag)
+            cannoncharge.setBlendMode(3)
+            if !(global.framecounter.low & 0x01)
+                cannoncharge.setTintColor(1, 1, 1, 0.7)
+            else
+                cannoncharge.setTintColor(1, 1, 1, 0.2)
+        }
+        Renderer.drawCustomSprite("tenna_signaljammer_legs_front", px + Tenna.boss.signalJammer.legFrontXOffset, py + 64 + Tenna.boss.signalJammer.legFrontYOffset, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4040)
+        Renderer.drawCustomSprite("tenna_signaljammer_legs_back", px + Tenna.boss.signalJammer.legBackXOffset, py + 64 + Tenna.boss.signalJammer.legBackYOffset, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4030)
+
+        if Tenna.fH.hurtTimer
+            Tenna.fH.hurtTimer--
+
+        if Tenna.boss.signalJammer.droneDoorOpenTimer
+            Renderer.drawCustomSprite("tenna_signaljammer_door_open", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4050)
+        else
+            Renderer.drawCustomSprite("tenna_signaljammer_door_closed", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4036)
+
+        if Tenna.fH.hurtTimer && !(global.framecounter.low & 0x01)
+        {
+            Renderer.drawCustomSprite("tenna_signaljammer_body_hit", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4035)
+            return true
+        }
+		Renderer.drawCustomSprite("tenna_signaljammer_body", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4035)
+        return true
+	}
+    if (objA0.update_address == 0x313368) // Signal Jammer Bomb
+    {
+        Renderer.drawCustomSprite(stringformat("tenna_bbb_bomb_%d", Tenna.bossBomber.dropBombTimes), px, py, 0x00, 0, 0x4041, 0, 255)
+        return true
+    }
+    if (objA0.update_address == 0x31336A) // Signal Jammer Defeated
+    {
+        Renderer.drawCustomSprite("tenna_signaljammer_body", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0x4035)
+        return true
+    }
+    if (objA0.update_address == 0x31336C) // Signal Jammer Debris
+    {
+        if (global.framecounter.low & 0x01)
+            return true
+        if objA0.subtype2c == 0x00
+            Renderer.drawCustomSprite("tenna_signaljammer_legs_front", px + Tenna.boss.signalJammer.legFrontXOffset, py + 64 + Tenna.boss.signalJammer.legFrontYOffset, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0x4040)
+        else if objA0.subtype2c == 0x02
+            Renderer.drawCustomSprite("tenna_signaljammer_legs_back", px + Tenna.boss.signalJammer.legBackXOffset, py + 64 + Tenna.boss.signalJammer.legBackYOffset, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0x4030)
+        else if objA0.subtype2c == 0x04
+            Renderer.drawCustomSprite("tenna_signaljammer_body_broken_topl", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0xc035)
+        else if objA0.subtype2c == 0x06
+            Renderer.drawCustomSprite("tenna_signaljammer_body_broken_topr", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0xc035)
+        else if objA0.subtype2c == 0x08
+            Renderer.drawCustomSprite("tenna_signaljammer_body_broken_bottoml", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0xc035)
+        else if objA0.subtype2c == 0x0a
+            Renderer.drawCustomSprite("tenna_signaljammer_body_broken_bottomr", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0xc035)
+        return true
+    }
+	return base.Standalone.onWriteToSpriteTable(px, py, renderQueue)
+}
+
+//#address-hook(0x31336A)
+function void Tenna.boss.signalJammer.DefeatedUpdate()
+{
+    global.level_started = -0x7f
+    objA0.box_size.x = 255
+    objA0.box_size.y = 255
+    DrawObject()
+
+    if objA0.state == 1
+    {
+        playSound(0x4e)
+        
+        if Game.getSetting(SETTING_GFX_ANTIFLICKER) == 0
+        {
+            finalopacity1 = 0.5f
+            finalopacity2 = 0.5f
+        }
+        else if Game.getSetting(SETTING_GFX_ANTIFLICKER) == 1
+        {
+            finalopacity1 = 0.3f
+            finalopacity2 = 0.3f
+        }
+
+		spawnChildObject(0x083d84, 0x00, 0, 0)
+		if (_equal())
+		{
+			u8[A1 + 0x2c] = 0x04
+		}
+
+        ///// Legs
+
+        if (allocDynamicObjectStd())
+        {
+            objA1.update_address = 0x31336C
+            objA1.subtype2c = 0x00   
+            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+            objA1.render_flags = render_flag.WORLD
+            objA1.sprite_priority = 0x100         
+            objA1.box_size.x = 48
+            objA1.box_size.y = 48
+            objA1.collision_attributes = collision.size.16x16
+            objA1.hitbox_extends.x = 12
+            objA1.hitbox_extends.y = 16
+            objA1.position.y.u16 = objA0.position.y.u16
+            objA1.position.x.u16 = objA0.position.x.u16
+            GetRandomNumber()
+            D0.u16 &= 0xff
+            objA1.velocity.y = -0x200 - D0.u16
+            GetRandomNumber()
+            D0.u16 &= 0xff
+            objA1.velocity.x = 0x100 + D0.u16
+            GetRandomNumber()
+            D0.u16 &= 0x3
+            if D0.u16 > 0x2
+                objA1.velocity.x = -objA1.velocity.x
+            objA1.update_address = 0x31336C
+            objA1.subtype2c = 0x02 
+            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+            objA1.render_flags = render_flag.WORLD
+            objA1.sprite_priority = 0x100         
+            objA1.box_size.x = 48
+            objA1.box_size.y = 48
+            objA1.collision_attributes = collision.size.16x16
+            objA1.hitbox_extends.x = 12
+            objA1.hitbox_extends.y = 16
+            objA1.position.y.u16 = objA0.position.y.u16
+            objA1.position.x.u16 = objA0.position.x.u16
+            GetRandomNumber()
+            D0.u16 &= 0xff
+            objA1.velocity.y = -0x200 - D0.u16
+            GetRandomNumber()
+            D0.u16 &= 0xff
+            objA1.velocity.x = 0x100 + D0.u16
+            GetRandomNumber()
+            D0.u16 &= 0x3
+            if D0.u16 > 0x2
+                objA1.velocity.x = -objA1.velocity.x
+        }
+    }
+
+    if objA0.state < 240
+        objA0.state++
+
+    if objA0.state == 60
+    {
+        objA0.velocity.y = -0x300
+        playSound(SFX_BOMBFALL)
+    }
+
+    if objA0.state >= 60
+    {
+        objA0.position.x.u16 = Math.roundToInt(lerp(objA0.position.x.u16, camera.position.x.u16 + 40, 0.05f))
+        MoveWithGravity20()
+        UpdateMovementStraightSimple()
+
+        if objA0.position.y.u16 > 0x98 && objA0.velocity.y > 0
+        {
+            Tenna.createBossBatteryRing()
+            playSound(SFX_COLLAPSE)
+            playSound(0x9b)
+            playSound(0x4e)
+            camera.screenshake.state = 0x14
+
+            if System.getGlobalVariableValueByName("bossWarningMod.warningType") == 1
+                System.callFunctionByName("bossWarningMod.createFreedomPlanet2FireExplosion")
+
+            if Game.getSetting(SETTING_GFX_ANTIFLICKER) == 0
+            {
+                finalopacity1 = 0.75f
+                finalopacity2 = 0.75f
+            }
+            else if Game.getSetting(SETTING_GFX_ANTIFLICKER) == 1
+            {
+                finalopacity1 = 0.5f
+                finalopacity2 = 0.5f
+            }
+
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31336C
+                objA1.subtype2c = 0x04   
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100         
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+                objA1.position.x.u16 = objA0.position.x.u16
+                objA1.position.y.u16 = objA0.position.y.u16 - 80
+                objA1.velocity.x = -0x200
+                objA1.velocity.y = -0x300
+            }
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31336C
+                objA1.subtype2c = 0x06 
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100         
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+                objA1.position.x.u16 = objA0.position.x.u16 + 96
+                objA1.position.y.u16 = objA0.position.y.u16 - 80
+                objA1.velocity.x = 0x200
+                objA1.velocity.y = -0x300
+            }
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31336C
+                objA1.subtype2c = 0x08   
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100         
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+                objA1.position.x.u16 = objA0.position.x.u16
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.velocity.x = -0x200
+                objA1.velocity.y = -0x100
+            }
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x31336C
+                objA1.subtype2c = 0x0a 
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100         
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+                objA1.position.x.u16 = objA0.position.x.u16 + 96
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.velocity.x = 0x200
+                objA1.velocity.y = -0x100
+            }
+
+            if (allocDynamicObjectStd()) // cutscene controller
+            {
+                Tenna.finalIntro.state = 0
+                Tenna.finalIntro.stateTimer = 0
+                objA1.update_address = 0x313372
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100         
+                objA1.box_size.x = 48
+                objA1.box_size.y = 48
+                objA1.collision_attributes = collision.size.16x16
+                objA1.hitbox_extends.x = 12
+                objA1.hitbox_extends.y = 16
+                objA1.position.x.u16 = objA0.position.x.u16 + 96
+                objA1.position.y.u16 = objA0.position.y.u16
+            }
+
+            if !Tenna.finalIntro.sawCutscene
+            {
+                if (allocDynamicObjectStd()) // Tenna
+                {
+                    objA1.update_address = 0x313370
+                    objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                    objA1.render_flags = render_flag.WORLD
+                    objA1.sprite_priority = 0x100         
+                    objA1.box_size.x = 48
+                    objA1.box_size.y = 48
+                    objA1.collision_attributes = collision.size.16x16
+                    objA1.hitbox_extends.x = 12
+                    objA1.hitbox_extends.y = 16
+                    objA1.position.x.u16 = objA0.position.x.u16 + 80
+                    objA1.position.y.u16 = objA0.position.y.u16 
+                    objA1.velocity.x = 0x100
+                    objA1.velocity.y = -0x200
+                    objA1.value39 = 0
+                }
+            }
+
+            objA0.animation.sprite = 0
+            Object.TriggerUnloading()
+            return
+        }
+    }
+    else
+    {
+        objA0.velocity.x = 0
+        objA0.velocity.y = 0
+    }
+}
+
+//#address-hook(0x31336C)
+function void Tenna.boss.signalJammer.DebrisUpdate()
+{
+    global.level_started = -0x7f
+    objA0.box_size.x = 255
+    objA0.box_size.y = 255
+    DrawObject()
+    UpdateMovementStraightSimple()
+    MoveWithGravity20()
+
+    if objA0.subtype2c > 0x02 && objA0.position.y.u16 < camera.position.y.u16 + getScreenHeight() / 2
+    {
+        if !(global.framecounter.low & 0x06)
+            camera.screenshake.state = 0x14
+    }
+
+    if objA0.state == 0
+    {
+		spawnChildObject(0x083d84, 0x00, 0, 0)
+		if (_equal())
+		{
+			u8[A1 + 0x2c] = 0x04
+		}
+        objA0.state++
+    }
+
+    if objA0.position.y.u16 > 0x180 && objA0.velocity.y > 0
+    {
+        TennaS.FlashAlpha = 0
+        TennaS.FlashAlpha2 = 0
+        objA0.animation.sprite = 0
+        Object.TriggerUnloading()
+        return
+    }
+}
+
+//# address-hook(0x0887ca) end(0x0887d4)
+function void fn0887ca()
+{
+	SetupAsSignpostSpawner()
+
+	// Spawn boss giblets
+	// "spawnChildObjects(0x088b42)" replaced by:
+	spawnChildObject(0x08894c, 0x00, 0, 0)
+	spawnChildObject(0x08894c, 0x02, -28, 0)
+	spawnChildObject(0x08894c, 0x04, 28, 0)
+	spawnChildObject(0x08894c, 0x06, -28, -22)
+	spawnChildObject(0x08894c, 0x08, 28, -22)
+}
