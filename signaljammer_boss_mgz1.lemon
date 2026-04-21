@@ -1,5 +1,6 @@
 // Signal Jammer in MGZ1 Boss Mod
 // For Sonic 3 A.I.R. v26.03.28.0
+// This script replaces the Tunnelbot in Marble Garden Zone Act 1 with the Signal Jammer boss.
 
 // Global Variables for Signal Jammer
 global bool SignalJammer.MGZ1.defeated
@@ -607,11 +608,11 @@ function void SignalJammer.MGZ1.BombBaseUpdate()
     if !(global.framecounter.low & 0x03)
         playSound(0x89)  
 
-    if objA0.position.y.u16 > 0xd0
+    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() - 48
     {
         playSound(0x4e)
         camera.screenshake.state = 0x10
-        spawnChildObject(0x068d88, 0x00, 0, -36)
+        spawnChildObject(0x083d84, 0x00, 0, 0)
         Object.TriggerUnloading()
         return
     }
@@ -632,7 +633,7 @@ function void SignalJammer.MGZ1.DefeatedUpdate()
         objA0.state++
     }
 
-    if objA0.position.y.u16 > 0x180
+    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() + 64
     {
         Object.TriggerUnloading()
         return
