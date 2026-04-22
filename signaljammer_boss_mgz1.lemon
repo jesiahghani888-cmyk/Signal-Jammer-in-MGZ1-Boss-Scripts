@@ -318,7 +318,6 @@ function void SignalJammer.MGZ1.StateMachine()
             objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
             objA1.render_flags = render_flag.WORLD
             objA1.sprite_priority = 0x100
-            objA1.hitbox_extends.x = 16
             objA1.hitbox_extends.y = 16
             objA1.box_size.x = 999
             objA1.box_size.y = 999
