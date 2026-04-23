@@ -34,8 +34,9 @@ global u8 Tenna.laughTimer
 //# address-hook(0x088568) end(0x08856c)
 function void Tenna.boss.signalJammer.InitReplacement()
 {
-    // Check if we are in Marble Garden Zone Act 1 (Zone 0x03, Act 0x00)
-    if (global.zone_act == 0x0300)
+    // Check if we are in Marble Garden Zone Act 1 (Zone 0x02, Act 0x00)
+    // Note: In S3AIR, MGZ is Zone 0x02. Act 1 is 0x00.
+    if (global.zone_act == 0x0200)
     {
         A1 = 0x08859c
         // Use the custom update address for Signal Jammer's BaseUpdate
@@ -457,7 +458,7 @@ function void SignalJammer.MGZ1.DroneBaseUpdate()
         GetRandomNumber()
         D0.u16 &= 0xff
         objA0.velocity.y = -0x300 - D0.u16
-
+        
         GetRandomNumber()
         D0.u16 &= 0xff
         objA0.velocity.x = 0x180 + D0.u16
