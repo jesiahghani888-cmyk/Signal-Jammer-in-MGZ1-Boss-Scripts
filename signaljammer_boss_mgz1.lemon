@@ -46,6 +46,9 @@ function void Tenna.boss.signalJammer.InitReplacement()
             return
 
         SignalJammer.MGZ1.Initialize()
+        
+        // Setup as signpost spawner for when it's defeated
+        SetupAsSignpostSpawner()
     }
     else
     {
