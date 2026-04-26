@@ -21,13 +21,17 @@ global u8 SignalJammer.MGZ1.droneDelayTimer
 global u8 SignalJammer.MGZ1.droneDoorOpenTimer
 global u8 SignalJammer.MGZ1.defeatedDrones
 
-// Tenna-specific global variables used in logic (from signaljammer.lemon)
+// Tenna-specific global variables used in logic
 global u8 Tenna.fH.hurtTimer
 global bool Tenna.useLetterboxing
 global bool Tenna.sszTeleportInv
 global u8 Tenna.bossBomber.dropBombTimes
 global u8 Tenna.fH.friedTimer
 global u8 Tenna.laughTimer
+global f32 finalopacity1
+global f32 finalopacity2
+global u8 TennaS.FlashAlpha
+global u8 TennaS.FlashAlpha2
 
 // Address hook for MGZ1 Boss (Tunnelbot)
 // Replaces the initialization of the MGZ1 boss with Signal Jammer
@@ -35,11 +39,9 @@ global u8 Tenna.laughTimer
 function void Tenna.boss.signalJammer.InitReplacement()
 {
     // Check if we are in Marble Garden Zone Act 1 (Zone 0x02, Act 0x00)
-    // Note: In S3AIR, MGZ is Zone 0x02. Act 1 is 0x00.
     if (global.zone_act == 0x0200)
     {
         A1 = 0x08859c
-        // Use the custom update address for Signal Jammer's BaseUpdate
         if (InitBoss(0x313362)) 
             return
 
@@ -285,10 +287,14 @@ function void SignalJammer.MGZ1.StateMachine()
         }
 
         if SignalJammer.MGZ1.stateTimer == 40 || SignalJammer.MGZ1.stateTimer == 80
-            playSound(0x6d)
+            playSound(0x96)
 
-        if SignalJammer.MGZ1.stateTimer >= 80
+        if SignalJammer.MGZ1.stateTimer == 80
         {
+            SignalJammer.MGZ1.legFrontXOffset = 0
+            SignalJammer.MGZ1.legFrontYOffset = 0
+            SignalJammer.MGZ1.legBackXOffset = 0
+            SignalJammer.MGZ1.legBackYOffset = 0
             SignalJammer.MGZ1.stateTimer = 0
             SignalJammer.MGZ1.stateRepeat++
             if SignalJammer.MGZ1.stateRepeat >= 3
@@ -308,7 +314,21 @@ function void SignalJammer.MGZ1.StateMachine()
         
         if SignalJammer.MGZ1.stateTimer == 30 || SignalJammer.MGZ1.stateTimer == 60 || SignalJammer.MGZ1.stateTimer == 90
         {
-            spawnChildObject(0x313368, 0x00, 0, 0) // Bomb
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x313368 // SignalJammer.MGZ1.BombBaseUpdate
+                objA1.position.x.u16 = objA0.position.x.u16
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.hitbox_extends.x = 16
+                objA1.hitbox_extends.y = 16
+                objA1.box_size.x = 999
+                objA1.box_size.y = 999
+                objA1.state = 0
+                objA1.collision_attributes = (collision.size.16x16 | collision.flag.THREAT)
+            }
         }
 
         if SignalJammer.MGZ1.stateTimer >= 120
@@ -462,7 +482,7 @@ function void SignalJammer.MGZ1.DroneBaseUpdate()
         GetRandomNumber()
         D0.u16 &= 0xff
         objA0.velocity.x = 0x180 + D0.u16
-
+        
         GetRandomNumber()
         D0.u16 &= 0x3
         if D0.u16 > 0x2
@@ -499,8 +519,19 @@ function void SignalJammer.MGZ1.DroneBaseUpdate()
 
         if !(level.framecounter.low & 0x0f)
         {
-            objA0.velocity.x = objA0.velocity.x / 2
-            objA0.velocity.y = objA0.velocity.y / 2
+            if (allocDynamicObjectStd())
+            {
+                objA1.update_address = 0x313366 // SignalJammer.MGZ1.DroneShotBaseUpdate
+                objA1.position.x.u16 = objA0.position.x.u16
+                objA1.position.y.u16 = objA0.position.y.u16
+                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+                objA1.render_flags = render_flag.WORLD
+                objA1.sprite_priority = 0x100
+                objA1.velocity.x = 0
+                objA1.velocity.y = 0x200
+                objA1.state = 0
+                objA1.collision_attributes = (collision.size.8x8 | collision.flag.THREAT)
+            }
         }
     }
 }
@@ -635,6 +666,35 @@ function void SignalJammer.MGZ1.DefeatedUpdate()
     }
 }
 
+//# address-hook(0x31336C)
+function void SignalJammer.MGZ1.DebrisUpdate()
+{
+    global.level_started = -0x7f
+    objA0.box_size.x = 255
+    objA0.box_size.y = 255
+    DrawObject()
+    UpdateMovementStraightSimple()
+    MoveWithGravity20()
+
+    if objA0.subtype2c > 0x02 && objA0.position.y.u16 < camera.position.y.u16 + getScreenHeight() / 2
+    {
+        if !(global.framecounter.low & 0x06)
+            camera.screenshake.state = 0x14
+    }
+
+    if objA0.state == 0
+    {
+        spawnChildObject(0x083d84, 0x00, 0, 0)
+        objA0.state++
+    }
+
+    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() + 64
+    {
+        Object.TriggerUnloading()
+        return
+    }
+}
+
 // Rendering hook
 function bool Standalone.onWriteToSpriteTable(s16 px, s16 py, u16 renderQueue)
 {
@@ -649,44 +709,19 @@ function bool Standalone.onWriteToSpriteTable(s16 px, s16 py, u16 renderQueue)
             SpriteHandle shot = Renderer.addSpriteHandle("tenna_signaljammer_drone_shot_0", px, py, 0xd013)
             shot.setPriorityFlag(true)
             shot.setFlipX(droneFlipFlag)
-            shot.setBlendMode(global.zone == 0x08 || global.zone == 0x0a ? 5 : 3)
+            shot.setBlendMode(3)
         }
         else
         {
             SpriteHandle shot = Renderer.addSpriteHandle("tenna_signaljammer_drone_shot_1", px, py, 0xd013)
             shot.setPriorityFlag(true)
             shot.setFlipX(droneFlipFlag)
-            shot.setBlendMode(global.zone == 0x08 || global.zone == 0x0a ? 5 : 3)
+            shot.setBlendMode(3)
         }
         return true
     }
     if (objA0.update_address == 0x313364) // Signal Jammer Drone
     {
-        if objA0.state > 180
-        {
-            if (global.framecounter.low & 0x01)
-            {
-                SpriteHandle antennacharge = Renderer.addSpriteHandle("tenna_signaljammer_drone_gun's_front_charge", px, py, 0x4080)
-                antennacharge.setPriorityFlag(true)
-                antennacharge.setFlipX(droneFlipFlag)
-                antennacharge.setBlendMode(3)
-                if (global.framecounter.low & 0x03)
-                    antennacharge.setTintColor(1, 1, 1, 0.7)
-                else
-                    antennacharge.setTintColor(1, 1, 1, 0.2) 
-            }
-            else
-            {
-                SpriteHandle antennacharge = Renderer.addSpriteHandle("tenna_signaljammer_drone_gun's_back_charge", px, py, 0x4080)
-                antennacharge.setPriorityFlag(true)
-                antennacharge.setFlipX(droneFlipFlag)
-                antennacharge.setBlendMode(3)
-                if !(global.framecounter.low & 0x03)
-                    antennacharge.setTintColor(1, 1, 1, 0.7)
-                else
-                    antennacharge.setTintColor(1, 1, 1, 0.2) 
-            }
-        }
         if (global.framecounter.low & 0x01)
             Renderer.drawCustomSprite("tenna_signaljammer_drone_body_0", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0x4061)
         else
