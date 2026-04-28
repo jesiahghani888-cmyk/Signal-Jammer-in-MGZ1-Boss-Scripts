@@ -1,6 +1,6 @@
 // Signal Jammer in MGZ1 Boss Mod
 // For Sonic 3 A.I.R. v26.03.28.0
-// This script replaces the Tunnelbot in Marble Garden Zone Act 1 with the Signal Jammer boss.
+// This script replaces the Tunnelbot in Marble Garden Zone Act 1 Boss with Signal Jammer from Sonic 3 & Tenna.
 
 // Global Variables for Signal Jammer
 global bool SignalJammer.MGZ1.defeated
@@ -289,15 +289,8 @@ function void SignalJammer.MGZ1.StateMachine()
             }
         }
 
-        if SignalJammer.MGZ1.stateTimer == 40 || SignalJammer.MGZ1.stateTimer == 80
-            playSound(0x96)
-
-        if SignalJammer.MGZ1.stateTimer == 80
+        if SignalJammer.MGZ1.stateTimer >= 80
         {
-            SignalJammer.MGZ1.legFrontXOffset = 0
-            SignalJammer.MGZ1.legFrontYOffset = 0
-            SignalJammer.MGZ1.legBackXOffset = 0
-            SignalJammer.MGZ1.legBackYOffset = 0
             SignalJammer.MGZ1.stateTimer = 0
             SignalJammer.MGZ1.stateRepeat++
             if SignalJammer.MGZ1.stateRepeat >= 3
@@ -307,33 +300,14 @@ function void SignalJammer.MGZ1.StateMachine()
             }
         }
     }
-    else if SignalJammer.MGZ1.state == 2 // Bombing run
+    else if SignalJammer.MGZ1.state == 2 // Attack phase
     {
         if SignalJammer.MGZ1.stateTimer == 1
         {
-            SignalJammer.MGZ1.flipFlag = !SignalJammer.MGZ1.flipFlag
-            playSound(0x6d)
+            SignalJammer.MGZ1.droneDoorOpenTimer = 60
+            playSound(0x5a)
         }
         
-        if SignalJammer.MGZ1.stateTimer == 30 || SignalJammer.MGZ1.stateTimer == 60 || SignalJammer.MGZ1.stateTimer == 90
-        {
-            if (allocDynamicObjectStd())
-            {
-                objA1.update_address = 0x313368 // SignalJammer.MGZ1.BombBaseUpdate
-                objA1.position.x.u16 = objA0.position.x.u16
-                objA1.position.y.u16 = objA0.position.y.u16
-                objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
-                objA1.render_flags = render_flag.WORLD
-                objA1.sprite_priority = 0x100
-                objA1.hitbox_extends.x = 16
-                objA1.hitbox_extends.y = 16
-                objA1.box_size.x = 999
-                objA1.box_size.y = 999
-                objA1.state = 0
-                objA1.collision_attributes = (collision.size.16x16 | collision.flag.THREAT)
-            }
-        }
-
         if SignalJammer.MGZ1.stateTimer >= 120
         {
             SignalJammer.MGZ1.state = 1
@@ -342,83 +316,59 @@ function void SignalJammer.MGZ1.StateMachine()
     }
 }
 
+function void SignalJammer.MGZ1.HealthUpdater()
+{
+    if Tenna.fH.hurtTimer
+        Tenna.fH.hurtTimer--
+
+    if boss.remaining_hits <= 0
+    {
+        SignalJammer.MGZ1.defeated = true
+        SignalJammer.MGZ1.PostBossCleanup()
+        Object.TriggerUnloading()
+        return
+    }
+
+    if objA0.collision_attributes
+    {
+        if (objA0.collision_attributes & collision.flag.HURT)
+        {
+            if !Tenna.fH.hurtTimer
+            {
+                boss.remaining_hits--
+                Tenna.fH.hurtTimer = 30
+                playSound(0x6e)
+                
+                if boss.remaining_hits <= 0
+                {
+                    SignalJammer.MGZ1.defeated = true
+                    SignalJammer.MGZ1.PostBossCleanup()
+                    Object.TriggerUnloading()
+                }
+            }
+        }
+    }
+}
+
 function void SignalJammer.MGZ1.SpawnDrones()
 {
     if SignalJammer.MGZ1.droneDelayTimer
         SignalJammer.MGZ1.droneDelayTimer--
-    if SignalJammer.MGZ1.droneDoorOpenTimer
-        SignalJammer.MGZ1.droneDoorOpenTimer--
 
-    if SignalJammer.MGZ1.droneDoorOpenTimer == 1
-        playSound(0x6d)
-
-    if SignalJammer.MGZ1.currentDrones >= SignalJammer.MGZ1.maxDrones || SignalJammer.MGZ1.droneDelayTimer
-        return
-    if boss.remaining_hits <= 0
-        return
-
-    SignalJammer.MGZ1.droneDoorOpenTimer = 60
-    SignalJammer.MGZ1.droneDelayTimer = 30
-    SignalJammer.MGZ1.currentDrones++
-
-    playSound(0x6d)
-
-    if SignalJammer.MGZ1.flipFlag
-        spawnChildObject(0x313364, 0x00, -0x64, 0x10) // Drone
-    else
-        spawnChildObject(0x313364, 0x00, 0x64, 0x10) // Drone
-    
-    objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
-    objA1.render_flags = render_flag.WORLD
-    objA1.sprite_priority = 0x100
-    objA1.hitbox_extends.x = 16
-    objA1.hitbox_extends.y = 16
-    objA1.box_size.x = 999
-    objA1.box_size.y = 999
-    objA1.state = 0
-    objA1.collision_attributes = collision.size.8x8_2
-}
-
-function void SignalJammer.MGZ1.HealthUpdater()
-{
-    if (objA0.collision_attributes != 0)
-        return
-
-    if (objA0.state == 0)
+    if !SignalJammer.MGZ1.droneDelayTimer && SignalJammer.MGZ1.currentDrones < SignalJammer.MGZ1.maxDrones
     {
-        playSound(0x6e)
-        Tenna.fH.hurtTimer = 32 * 2
-        objA0.state = 0x20 * 2
-        objA0.flags2a |= 0x40
-        return
-    }
-    
-    if boss.remaining_hits <= 0
-    {
-        Tenna.useLetterboxing = true
-        Tenna.sszTeleportInv = true
-        A1 = 0xffffb000
-        if SignalJammer.MGZ1.flipFlag
-            objA0.position.x.u16 -= 160
-        playMusic(MUSIC_CTRL_FADEOUT)
-        AddScoreForBossEnemy()
-        Tenna.fH.hurtTimer = 0
-        objA0.update_address = 0x31336A // SignalJammer.MGZ1.DefeatedUpdate
-        objA0.velocity.x = 0
-        objA0.velocity.y = 0
-        SignalJammer.MGZ1.state = 5
-        SignalJammer.MGZ1.stateTimer = 0
-        SignalJammer.MGZ1.defeated = true
-        objA0.state = 0
-        Game.startSkippableCutscene()
-        return
-    }
-
-    --objA0.state
-    if (objA0.state == 0)
-    {
-        objA0.flags2a &= ~0x40
-        u8[A0 + 0x28] = u8[A0 + 0x25]
+        if (allocDynamicObjectStd())
+        {
+            objA1.update_address = 0x313364 // SignalJammer.MGZ1.DroneBaseUpdate
+            objA1.position.x.u16 = objA0.position.x.u16
+            objA1.position.y.u16 = objA0.position.y.u16
+            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+            objA1.render_flags = render_flag.WORLD
+            objA1.sprite_priority = 0x100
+            
+            SignalJammer.MGZ1.currentDrones++
+            SignalJammer.MGZ1.droneDelayTimer = 180
+        }
     }
 }
 
@@ -428,73 +378,22 @@ function void SignalJammer.MGZ1.DroneBaseUpdate()
     objA0.box_size.x = 255
     objA0.box_size.y = 255
     UpdateMovementStraightSimple()
-    if !player1.control_override
-        Enemy.DrawDynamicObject()
-    else
-        DrawObject()
-    boss.remaining_hits = 99
-
-    if level.boss_encounter || SignalJammer.MGZ1.state
-    {
-        if objA0.position.x.u16 < camera.position.x.u16 + 16
-        {
-            objA0.position.x.u16 = camera.position.x.u16 + 16
-            objA0.velocity.x = -objA0.velocity.x
-        }
-        if objA0.position.x.u16 > camera.position.x.u16 + getScreenWidth() - 16
-        {
-            objA0.position.x.u16 = camera.position.x.u16 + getScreenWidth() - 16
-            objA0.velocity.x = -objA0.velocity.x
-        }
-        if (objA0.position.y.u16 < camera.position.y.u16 + 16) && (global.zone != 0x0a)
-        {
-            objA0.position.y.u16 = camera.position.y.u16 + 16
-            objA0.velocity.y = -objA0.velocity.y
-        }
-        if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() - 48
-        {
-            objA0.position.y.u16 = camera.position.y.u16 + getScreenHeight() - 48
-            objA0.velocity.y = -objA0.velocity.y
-        }
-    }
-    else if !(objA0.render_flags & render_flag.VISIBLE) && (objA0.state > 120)
-    {
-        SignalJammer.MGZ1.maxDrones = 0
-        SignalJammer.MGZ1.currentDrones = 0
-        objA0.animation.sprite = 0
-        Object.TriggerUnloading()
-        return
-    }
-
-    if (objA0.collision_attributes == 0)
-    {
-        SignalJammer.MGZ1.currentDrones--
-        SignalJammer.MGZ1.droneDelayTimer = 120
-        playSound(0x6e)
-        spawnChildObject(0x083d84, 0x00, 0, 0)
-        Object.TriggerUnloading()
-        return
-    }
+    Enemy.DrawDynamicObject()
 
     if !objA0.state
     {
         GetRandomNumber()
         D0.u16 &= 0xff
         objA0.velocity.y = -0x300 - D0.u16
-        
+
         GetRandomNumber()
         D0.u16 &= 0xff
         objA0.velocity.x = 0x180 + D0.u16
-        
-        GetRandomNumber()
-        D0.u16 &= 0x3
-        if D0.u16 > 0x2
-            objA0.velocity.x = -objA0.velocity.x
 
         GetRandomNumber()
         D0.u16 &= 0x3
         if D0.u16 > 0x2
-            objA0.velocity.y = -objA0.velocity.y
+            objA0.velocity.x = -objA0.velocity.x
     }
 
     objA0.state++
@@ -512,11 +411,20 @@ function void SignalJammer.MGZ1.DroneBaseUpdate()
     }
     else if objA0.state >= 120 && objA0.state < 180
     {
-        LemonsTools_angleCheckWithSpeed(0x100)
+        // Simple homing logic
+        A1 = 0xffffb000
+        if objA1.position.x.u16 < objA0.position.x.u16
+            objA0.velocity.x = -0x100
+        else
+            objA0.velocity.x = 0x100
+            
+        if objA1.position.y.u16 < objA0.position.y.u16
+            objA0.velocity.y = -0x100
+        else
+            objA0.velocity.y = 0x100
     }
     else
     {
-        A1 = 0x08859c
         if objA0.state == 181
             playSound(0x5a)
 
@@ -532,7 +440,6 @@ function void SignalJammer.MGZ1.DroneBaseUpdate()
                 objA1.sprite_priority = 0x100
                 objA1.velocity.x = 0
                 objA1.velocity.y = 0x200
-                objA1.state = 0
                 objA1.collision_attributes = (collision.size.8x8 | collision.flag.THREAT)
             }
         }
@@ -545,153 +452,7 @@ function void SignalJammer.MGZ1.DroneShotBaseUpdate()
     UpdateMovementStraightSimple()
     DrawObject()
 
-    if objA0.state == 0
-    {
-        objA0.state = 1
-        objA0.velocity.y = 0x100
-    }
-
-    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() + 32 || objA0.position.x.u16 < camera.position.x.u16 - 32 || objA0.position.x.u16 > camera.position.x.u16 + getScreenWidth() + 32
-    {
-        Object.TriggerUnloading()
-        return
-    }
-}
-
-//# address-hook(0x313368)
-function void SignalJammer.MGZ1.BombBaseUpdate()
-{
-    s16 shakeX = s16(camera.position.x.u16) - s16(camera.foreground.x.u16)
-    s16 shakeY = s16(camera.position.y.u16) - s16(camera.foreground.y.u16)
-    bool prioFlag = (objA0.sprite_attributes & sprite_attribute.PRIORITY) != 0
-
-    if !objA0.state 
-    {
-        A1 = 0xffffb000
-        u16[A0 + 0x30] = objA1.position.x.u16
-        if Tenna.bossBomber.dropBombTimes >= 4
-            Tenna.bossBomber.dropBombTimes = 0
-        else
-            Tenna.bossBomber.dropBombTimes++
-        objA0.state++
-        return
-    }
-    if objA0.state == 1
-    {
-        objA0.velocity.y = -0x100
-        objA0.state++
-    }
-    DrawObject()
-    UpdateMovementStraightSimple()
-    MoveWithGravity20()
-
-    objA0.position.x.u16 = Math.roundToInt(lerp(objA0.position.x.u16, u16[A0 + 0x30], 0.1f))
-
-    if !(global.framecounter.low & 0x03)
-        playSound(0x89)  
-
-    if !(level.framecounter.low & 0x01)
-        Renderer.drawCustomSprite("tenna_bbb_bomb_watchout_0", u16[A0 + 0x30] - camera.position.x.u16 + shakeX, 0xde - camera.position.y.u16 + shakeY, 0x00, (prioFlag ? SPRITE_FLAG_PRIO : 0), 0x9001)
-    else
-        Renderer.drawCustomSprite("tenna_bbb_bomb_watchout_1", u16[A0 + 0x30] - camera.position.x.u16 + shakeX, 0xde - camera.position.y.u16 + shakeY, 0x00, (prioFlag ? SPRITE_FLAG_PRIO : 0), 0x9001)
-
-    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() - 48
-    {
-        playSound(0x4e)
-        camera.screenshake.state = 0x10
-        Input.setControllerRumble(-1, 0.5f, 0.5f, 500)
-        spawnChildObject(0x083d84, 0x00, 0, 0)
-
-        spawnChildObject(0x068d88, 0x00, 0, -36)
-        spawnChildObject(0x068d88, 0x02, 8, -28)
-        spawnChildObject(0x068d88, 0x04, -8, -28)
-        spawnChildObject(0x068d88, 0x06, 4, -20)
-        spawnChildObject(0x068d88, 0x08, -4, -20)
-        spawnChildObject(0x068d88, 0x0a, 4, -4)
-        spawnChildObject(0x068d88, 0x0c, -4, -4)
-
-        spawnChildObject(0x220248, 0x00, 0, 0) // Spread Fire (Left)
-        s16[A1 + 0x2e] = 15
-        objA1.mapping_offset = 0x01a99a
-        objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
-        objA1.render_flags = render_flag.WORLD
-        objA1.sprite_priority = 0x100
-        objA1.hitbox_extends.x = 8
-        objA1.hitbox_extends.y = 8
-        objA1.collision_attributes = (collision.size.8x16 | collision.flag.THREAT)
-        objA1.velocity.x = -0x500
-        objA1.velocity.y = 0
-        objA1.box_size.x = 999
-        objA1.box_size.y = 999
-        objA1.flags2b |= char.bonus.SHIELD_FIRE  
-        objA1.value39 = 0
-
-        spawnChildObject(0x220248, 0x00, 0, 0) // Spread Fire (Right)
-        s16[A1 + 0x2e] = 15
-        objA1.mapping_offset = 0x01a99a
-        objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
-        objA1.render_flags = render_flag.WORLD
-        objA1.sprite_priority = 0x100
-        objA1.hitbox_extends.x = 8
-        objA1.hitbox_extends.y = 8
-        objA1.collision_attributes = (collision.size.8x16 | collision.flag.THREAT)
-        objA1.velocity.x = 0x500
-        objA1.velocity.y = 0
-        objA1.box_size.x = 999
-        objA1.box_size.y = 999
-        objA1.flags2b |= char.bonus.SHIELD_FIRE 
-        objA1.value39 = 0
-
-        Object.TriggerUnloading()
-        return
-    }
-}
-
-//# address-hook(0x31336A)
-function void SignalJammer.MGZ1.DefeatedUpdate()
-{
-    global.level_started = -0x7f
-    objA0.box_size.x = 255
-    objA0.box_size.y = 255
-    DrawObject()
-
-    if objA0.state == 0
-    {
-        playSound(0x4e)
-        spawnChildObject(0x083d84, 0x00, 0, 0)
-        objA0.state++
-    }
-
-    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() + 64
-    {
-        Object.TriggerUnloading()
-        return
-    }
-}
-
-//# address-hook(0x31336C)
-function void SignalJammer.MGZ1.DebrisUpdate()
-{
-    global.level_started = -0x7f
-    objA0.box_size.x = 255
-    objA0.box_size.y = 255
-    DrawObject()
-    UpdateMovementStraightSimple()
-    MoveWithGravity20()
-
-    if objA0.subtype2c > 0x02 && objA0.position.y.u16 < camera.position.y.u16 + getScreenHeight() / 2
-    {
-        if !(global.framecounter.low & 0x06)
-            camera.screenshake.state = 0x14
-    }
-
-    if objA0.state == 0
-    {
-        spawnChildObject(0x083d84, 0x00, 0, 0)
-        objA0.state++
-    }
-
-    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() + 64
+    if objA0.position.y.u16 > camera.position.y.u16 + getScreenHeight() + 32
     {
         Object.TriggerUnloading()
         return
@@ -701,54 +462,23 @@ function void SignalJammer.MGZ1.DebrisUpdate()
 // Rendering hook
 function bool Standalone.onWriteToSpriteTable(s16 px, s16 py, u16 renderQueue)
 {
-    A1 = 0xffffb000
     bool flipFlag = !SignalJammer.MGZ1.flipFlag ? 0 : SPRITE_FLAG_FLIP_X  
-    bool droneFlipFlag = objA0.position.x.u16 > objA1.position.x.u16 ? 0 : SPRITE_FLAG_FLIP_X
 
     if (objA0.update_address == 0x313366) // Signal Jammer Drone Shot
     {
-        if (global.framecounter.low & 0x01)
-        {
-            SpriteHandle shot = Renderer.addSpriteHandle("tenna_signaljammer_drone_shot_0", px, py, 0xd013)
-            shot.setPriorityFlag(true)
-            shot.setFlipX(droneFlipFlag)
-            shot.setBlendMode(3)
-        }
-        else
-        {
-            SpriteHandle shot = Renderer.addSpriteHandle("tenna_signaljammer_drone_shot_1", px, py, 0xd013)
-            shot.setPriorityFlag(true)
-            shot.setFlipX(droneFlipFlag)
-            shot.setBlendMode(3)
-        }
+        Renderer.drawCustomSprite("tenna_signaljammer_drone_shot_0", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0xd013)
         return true
     }
     if (objA0.update_address == 0x313364) // Signal Jammer Drone
     {
-        if (global.framecounter.low & 0x01)
-            Renderer.drawCustomSprite("tenna_signaljammer_drone_body_0", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0x4061)
-        else
-            Renderer.drawCustomSprite("tenna_signaljammer_drone_body_1", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0x4061)
+        Renderer.drawCustomSprite("tenna_signaljammer_drone_body_0", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD), 0x4061)
         return true
     }
     if (objA0.update_address == 0x313362) // Signal Jammer
     {
         if Tenna.fH.hurtTimer
         {
-            if (global.framecounter.low & 0x01)
-            {
-                SpriteHandle hitflash = Renderer.addSpriteHandle("tenna_hitflash_0", px, py, 0x4070)
-                hitflash.setPriorityFlag(true)
-                hitflash.setFlipX(flipFlag)
-                hitflash.setBlendMode(3)
-            }
-            else
-            {
-                SpriteHandle hitflash = Renderer.addSpriteHandle("tenna_hitflash_1", px, py, 0x4070)
-                hitflash.setPriorityFlag(true)
-                hitflash.setFlipX(flipFlag)
-                hitflash.setBlendMode(3)
-            }
+            Renderer.drawCustomSprite("tenna_hitflash_0", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4070)
         }
 
         Renderer.drawCustomSprite("tenna_signaljammer_legs_front", px + SignalJammer.MGZ1.legFrontXOffset, py + 64 + SignalJammer.MGZ1.legFrontYOffset, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4040)
@@ -762,16 +492,10 @@ function bool Standalone.onWriteToSpriteTable(s16 px, s16 py, u16 renderQueue)
         Renderer.drawCustomSprite("tenna_signaljammer_body", px, py, 0x00, (SPRITE_FLAG_PRIO | render_flag.WORLD | flipFlag), 0x4035)
         return true
     }
-    if (objA0.update_address == 0x313368) // Signal Jammer Bomb
-    {
-        Renderer.drawCustomSprite(stringformat("tenna_bbb_bomb_%d", Tenna.bossBomber.dropBombTimes), px, py, 0x00, 0, 0x4041, 0, 255)
-        return true
-    }
     return base.Standalone.onWriteToSpriteTable(px, py, renderQueue)
 }
 
 // Post-boss cleanup hook
-//# address-hook(0x0887ca) end(0x0887d4)
 function void SignalJammer.MGZ1.PostBossCleanup()
 {
     SetupAsSignpostSpawner()
