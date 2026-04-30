@@ -21,7 +21,7 @@ global u8 SignalJammer.MGZ1.droneDelayTimer
 global u8 SignalJammer.MGZ1.droneDoorOpenTimer
 global u8 SignalJammer.MGZ1.defeatedDrones
 
-// Tenna-specific global variables used in logic
+// Tenna-specific global variables used in logic (if any are truly needed for MGZ1)
 global u8 Tenna.fH.hurtTimer
 global bool Tenna.useLetterboxing
 global bool Tenna.sszTeleportInv
@@ -354,22 +354,39 @@ function void SignalJammer.MGZ1.SpawnDrones()
 {
     if SignalJammer.MGZ1.droneDelayTimer
         SignalJammer.MGZ1.droneDelayTimer--
+    if SignalJammer.MGZ1.droneDoorOpenTimer
+        SignalJammer.MGZ1.droneDoorOpenTimer--
 
-    if !SignalJammer.MGZ1.droneDelayTimer && SignalJammer.MGZ1.currentDrones < SignalJammer.MGZ1.maxDrones
-    {
-        if (allocDynamicObjectStd())
-        {
-            objA1.update_address = 0x313364 // SignalJammer.MGZ1.DroneBaseUpdate
-            objA1.position.x.u16 = objA0.position.x.u16
-            objA1.position.y.u16 = objA0.position.y.u16
-            objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
-            objA1.render_flags = render_flag.WORLD
-            objA1.sprite_priority = 0x100
-            
-            SignalJammer.MGZ1.currentDrones++
-            SignalJammer.MGZ1.droneDelayTimer = 180
-        }
-    }
+    if SignalJammer.MGZ1.droneDoorOpenTimer == 1
+        playSound(0x6d)
+
+    if SignalJammer.MGZ1.currentDrones >= SignalJammer.MGZ1.maxDrones || SignalJammer.MGZ1.droneDelayTimer
+        return
+    if boss.remaining_hits > 8 // Only spawn drones if boss is not defeated yet
+        return
+
+    SignalJammer.MGZ1.droneDoorOpenTimer = 60
+    SignalJammer.MGZ1.droneDelayTimer = 30
+    SignalJammer.MGZ1.currentDrones++
+
+    playSound(0x6d)
+
+    if SignalJammer.MGZ1.flipFlag
+        spawnChildObject(0x313364, 0x00, -0x64, 0x10) // Drone
+    else
+        spawnChildObject(0x313364, 0x00, 0x64, 0x10) // Drone
+    objA1.sprite_attributes = (sprite_attribute.PRIORITY | 0x06bc)
+    objA1.render_flags = render_flag.WORLD
+    objA1.sprite_priority = 0x100
+    objA1.hitbox_extends.x = 16
+    objA1.hitbox_extends.y = 16
+    objA1.box_size.x = 999
+    objA1.box_size.y = 999
+    objA1.state = 0
+    objA1.collision_attributes = collision.size.8x8_2
+
+    if global.zone == 0x0a // This condition might be specific to Tenna's original zone, consider if needed for MGZ1
+        objA1.position.y.u16 = camera.position.y.u16 - 32
 }
 
 //# address-hook(0x313364)
